@@ -1,0 +1,8 @@
+PyQt6>=6.6.0
+PyQt6-Fluent-Widgets>=1.5.0
+python-mpv>=1.0.5
+pytest>=8.0.0
+pytest-qt>=4.4.0
+hypothesis>=6.98.0
+ruff>=0.2.0
+mypy>=1.8.0
