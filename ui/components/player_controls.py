@@ -1,14 +1,15 @@
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QHBoxLayout, QWidget, QStyle, QStyleOptionSlider
+from PyQt6.QtWidgets import QHBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, FluentIcon, Slider, ToolButton
 
 
-class ClickableSlider(Slider):
-    def mousePressEvent(self, e: QMouseEvent) -> None:
+class ClickableSlider(Slider):  # type: ignore[misc]
+    def mousePressEvent(self, e: QMouseEvent | None) -> None:
         super().mousePressEvent(e)
-        if e.button() == Qt.MouseButton.LeftButton:
-            val = self.minimum() + ((self.maximum() - self.minimum()) * e.position().x()) / self.width()
+        if e is not None and e.button() == Qt.MouseButton.LeftButton:
+            x_pos = e.position().x()
+            val = self.minimum() + ((self.maximum() - self.minimum()) * x_pos) / self.width()
             self.setValue(int(val))
             self.sliderMoved.emit(self.value())
 

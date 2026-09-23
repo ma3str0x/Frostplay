@@ -1,12 +1,11 @@
-from PyQt6.QtCore import QTimer, Qt, QPoint
-from PyQt6.QtGui import QKeyEvent, QShortcut, QKeySequence
+from PyQt6.QtCore import QPoint, Qt, QTimer
+from PyQt6.QtGui import QKeySequence, QResizeEvent, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QVBoxLayout,
-    QWidget,
 )
 from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import FluentWindow, NavigationItemPosition
@@ -43,14 +42,14 @@ class MainWindow(FluentWindow):  # type: ignore
 
         self.player: PlayerInterface | None = None
         self._mpv_initialized = False
-        
+
         # Native window (mpv) cannot be animated/faded properly by Qt,
         # so we disable the interface transition animation.
         self.stackedWidget.setAnimationEnabled(False)
         self.stackedWidget.setStyleSheet(
             "QStackedWidget { border: none; border-radius: 0px; background-color: transparent; }"
         )
-        
+
         self._init_navigation()
         self._init_shortcuts()
 
@@ -61,10 +60,10 @@ class MainWindow(FluentWindow):  # type: ignore
     def _init_shortcuts(self) -> None:
         self.shortcut_space = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         self.shortcut_space.activated.connect(self._on_play_pause)
-        
+
         self.shortcut_left = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
         self.shortcut_left.activated.connect(self._on_seek_left)
-        
+
         self.shortcut_right = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
         self.shortcut_right.activated.connect(self._on_seek_right)
 
@@ -116,10 +115,10 @@ class MainWindow(FluentWindow):  # type: ignore
         history_layout = QVBoxLayout(self.history_frame)
         history_layout.setContentsMargins(10, 10, 10, 10)
         history_layout.setSpacing(0)
-        
+
         self.history_panel = HistoryPanel(self.history_frame)
         history_layout.addWidget(self.history_panel)
-        
+
         self.history_panel.file_selected.connect(
             self._on_history_file_selected
         )
@@ -135,11 +134,11 @@ class MainWindow(FluentWindow):  # type: ignore
         settings_layout = QVBoxLayout(self.settings_frame)
         settings_layout.setContentsMargins(10, 10, 10, 10)
         settings_layout.setSpacing(0)
-        
+
         from qfluentwidgets import SimpleCardWidget
         settings_card = SimpleCardWidget(self.settings_frame)
         settings_layout.addWidget(settings_card)
-        
+
         self.addSubInterface(
             self.settings_frame,
             FIF.SETTING,
@@ -149,14 +148,14 @@ class MainWindow(FluentWindow):  # type: ignore
         # Hide top menu and back buttons as requested
         self.navigationInterface.setMenuButtonVisible(False)
         self.navigationInterface.setReturnButtonVisible(False)
-        
+
         # Prevent the navigation panel from auto-expanding in fullscreen mode
         self.navigationInterface.setMinimumExpandWidth(99999)
-        
+
         # Shift items down by 1 position (approx 44px) to compensate
         self.navigationInterface.panel.topLayout.insertSpacing(0, 44)
 
-    def resizeEvent(self, e) -> None:
+    def resizeEvent(self, e: "QResizeEvent | None") -> None:
         super().resizeEvent(e)
         # Force navigation panel and main window to repaint after resize
         # This fixes visual glitches when maximizing/going fullscreen with embedded libmpv
@@ -194,7 +193,7 @@ class MainWindow(FluentWindow):  # type: ignore
             # Calculate position to show above the btn_tracks
             pos = self.controls.btn_tracks.mapToGlobal(QPoint(0, 0))
             self.tracks_panel.move(
-                pos.x() + self.controls.btn_tracks.width() - self.tracks_panel.width(), 
+                pos.x() + self.controls.btn_tracks.width() - self.tracks_panel.width(),
                 pos.y() - self.tracks_panel.height() - 10
             )
             self.tracks_panel.show()

@@ -5,7 +5,7 @@ from qfluentwidgets import ListWidget, SimpleCardWidget
 from db.history import get_history
 
 
-class HistoryPanel(SimpleCardWidget):
+class HistoryPanel(SimpleCardWidget):  # type: ignore[misc]
     file_selected = pyqtSignal(str)
 
     def __init__(self, parent: QFrame | None = None) -> None:

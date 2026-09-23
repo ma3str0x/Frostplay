@@ -10,7 +10,7 @@ class PlayerWidget(QWidget):
         super().__init__(parent)
         self.setStyleSheet("background-color: black;")
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        if event is not None and event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)

@@ -1,9 +1,18 @@
-from PyQt6.QtCore import pyqtSignal, Qt, QPoint
+from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget, QFrame
-from qfluentwidgets import SmoothScrollArea, SubtitleLabel, Slider, FluentIcon, IconWidget, BodyLabel, CaptionLabel, ToolButton
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from qfluentwidgets import (
+    BodyLabel,
+    CaptionLabel,
+    FluentIcon,
+    IconWidget,
+    Slider,
+    SmoothScrollArea,
+    SubtitleLabel,
+    ToolButton,
+)
 
-from core.types import MixSelection, Track
+from core.types import Track
 from ui.components.track_row import TrackRow
 
 
@@ -14,18 +23,21 @@ class TracksPanel(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setObjectName("TracksPanel")
-        self.setStyleSheet("QFrame#TracksPanel { background-color: #2b2b2b; border: 1px solid #444; border-radius: 8px; }")
+        self.setStyleSheet(
+            "QFrame#TracksPanel { background-color: #2b2b2b; "
+            "border: 1px solid #444; border-radius: 8px; }"
+        )
         self.setMinimumWidth(420)
         self.setMaximumHeight(500)
         self._rows: list[TrackRow] = []
 
         title = SubtitleLabel("Audio Tracks")
         title.setContentsMargins(10, 10, 10, 0)
-        
+
         self.btn_close = ToolButton(FluentIcon.CLOSE)
         self.btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_close.clicked.connect(self.hide)
-        
+
         title_layout = QHBoxLayout()
         title_layout.addWidget(title)
         title_layout.addStretch(1)
@@ -34,22 +46,24 @@ class TracksPanel(QFrame):
         # Master Volume row
         master_vol_layout = QHBoxLayout()
         master_vol_layout.setContentsMargins(15, 5, 15, 5)
-        
+
         self.master_vol_icon = IconWidget(FluentIcon.VOLUME)
         self.master_vol_icon.setFixedSize(16, 16)
-        
+
         self.master_vol_label = BodyLabel("Master Volume")
-        
+
         self.master_vol_slider = Slider(Qt.Orientation.Horizontal)
         self.master_vol_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.master_vol_slider.setRange(0, 100)
         self.master_vol_slider.setValue(100)
         self.master_vol_slider.valueChanged.connect(self._on_master_vol_changed)
-        
+
         self.master_vol_percent = CaptionLabel("100%")
         self.master_vol_percent.setFixedWidth(35)
-        self.master_vol_percent.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        
+        self.master_vol_percent.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
         master_vol_layout.addWidget(self.master_vol_icon)
         master_vol_layout.addWidget(self.master_vol_label)
         master_vol_layout.addWidget(self.master_vol_slider)
@@ -72,24 +86,25 @@ class TracksPanel(QFrame):
         layout.addLayout(title_layout)
         layout.addLayout(master_vol_layout)
         layout.addWidget(self.scroll_area)
-        
+
         self._drag_pos: QPoint | None = None
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        if event is not None and event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = event.globalPosition().toPoint()
             event.accept()
 
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self._drag_pos is not None:
+    def mouseMoveEvent(self, event: QMouseEvent | None) -> None:
+        if event is not None and self._drag_pos is not None:
             delta = event.globalPosition().toPoint() - self._drag_pos
             self.move(self.pos() + delta)
             self._drag_pos = event.globalPosition().toPoint()
             event.accept()
 
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         self._drag_pos = None
-        event.accept()
+        if event is not None:
+            event.accept()
 
     def _on_master_vol_changed(self) -> None:
         val = self.master_vol_slider.value()

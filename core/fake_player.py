@@ -7,15 +7,18 @@ class FakePlayer(PlayerInterface):
     def __init__(self, tracks: list[Track]) -> None:
         self._tracks = tracks
         self.last_mix: str = ""
-        self.is_playing: bool = False
+        self._is_playing: bool = False
         self.current_position: float = 0.0
 
+    def is_playing(self) -> bool:
+        return self._is_playing
+
     def open(self, filepath: str) -> None:
-        self.is_playing = False
+        self._is_playing = False
         self.current_position = 0.0
 
     def play_pause(self) -> None:
-        self.is_playing = not self.is_playing
+        self._is_playing = not self._is_playing
 
     def seek(self, seconds: float, absolute: bool = True) -> None:
         if absolute:
