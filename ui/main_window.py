@@ -183,6 +183,7 @@ class MainWindow(FluentWindow):  # type: ignore
     def _open_file(self, filepath: str) -> None:
         if not self.player:
             return
+        self.player_widget.hide_placeholder()
         self.player.open(filepath)
         self.tracks_panel.set_tracks(self.player.get_tracks())
         add_to_history(filepath)
