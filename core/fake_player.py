@@ -37,3 +37,17 @@ class FakePlayer(PlayerInterface):
 
     def get_duration(self) -> float:
         return 100.0  # Fake duration
+
+    def set_volume(self, volume: int) -> None:
+        pass
+
+    def close(self) -> None:
+        self._is_playing = False
+        self.current_position = 0.0
+        self.last_mix = ""
+
+    def set_aspect_ratio_callback(self, callback) -> None:
+        pass
+
+    def get_video_ratio(self) -> float:
+        return 1.777  # Default 16:9

@@ -39,3 +39,15 @@ class PlayerInterface(ABC):
     @abstractmethod
     def set_volume(self, volume: int) -> None:
         pass
+
+    @abstractmethod
+    def close(self) -> None:
+        pass
+
+    @abstractmethod
+    def set_aspect_ratio_callback(self, callback) -> None:
+        pass
+
+    @abstractmethod
+    def get_video_ratio(self) -> float:
+        pass

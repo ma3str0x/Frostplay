@@ -18,6 +18,7 @@ class PlayerControls(QWidget):
     play_pause_clicked = pyqtSignal()
     seek_requested = pyqtSignal(float)
     open_requested = pyqtSignal()
+    close_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -43,13 +44,19 @@ class PlayerControls(QWidget):
         self.btn_tracks.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_tracks.setEnabled(False)
 
+        self.btn_close = ToolButton(FluentIcon.CLOSE)
+        self.btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_close.setEnabled(False)
+        self.btn_close.clicked.connect(self.close_requested)
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setContentsMargins(14, 10, 14, 14)
         layout.addWidget(self.btn_play)
         layout.addWidget(self.slider)
         layout.addWidget(self.time_label)
         layout.addWidget(self.btn_tracks)
         layout.addWidget(self.btn_open)
+        layout.addWidget(self.btn_close)
 
         self._duration = 0.0
 
@@ -60,6 +67,7 @@ class PlayerControls(QWidget):
         self.slider.setEnabled(is_loaded)
         self.btn_play.setEnabled(is_loaded)
         self.btn_tracks.setEnabled(is_loaded)
+        self.btn_close.setEnabled(is_loaded)
 
     def update_position(self, position: float) -> None:
         if not self.slider.isSliderDown():

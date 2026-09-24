@@ -73,6 +73,7 @@ venv.bak/
 # Local application data (like SQLite DBs we use for history)
 *.db
 *.sqlite3
+config.json
 
 # Logs
 logs/

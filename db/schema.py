@@ -1,7 +1,10 @@
 import sqlite3
 
 
-def init_db(db_path: str = "mixer.db") -> None:
+from core.config import DB_PATH
+
+
+def init_db(db_path: str = DB_PATH) -> None:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 

@@ -4,7 +4,10 @@ from datetime import datetime
 from db.schema import init_db
 
 
-def add_to_history(file_path: str, db_path: str = "mixer.db") -> None:
+from core.config import DB_PATH
+
+
+def add_to_history(file_path: str, db_path: str = DB_PATH) -> None:
     init_db(db_path)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -18,7 +21,7 @@ def add_to_history(file_path: str, db_path: str = "mixer.db") -> None:
     conn.close()
 
 
-def get_history(limit: int = 50, db_path: str = "mixer.db") -> list[str]:
+def get_history(limit: int = 50, db_path: str = DB_PATH) -> list[str]:
     init_db(db_path)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()

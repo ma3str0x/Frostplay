@@ -56,3 +56,26 @@ class MpvPlayer(PlayerInterface):
 
     def set_volume(self, volume: int) -> None:
         self.mpv.volume = volume
+
+    def close(self) -> None:
+        self.mpv.command("stop")
+        self._tracks = []
+        self.mpv.lavfi_complex = ""
+
+    def set_aspect_ratio_callback(self, callback) -> None:
+        @self.mpv.property_observer('video-params')
+        def on_video_params(name, value):
+            if value and 'w' in value and 'h' in value:
+                w = value['w']
+                h = value['h']
+                if h > 0:
+                    callback(w / h)
+        self._video_params_observer = on_video_params
+
+    def get_video_ratio(self) -> float:
+        params = getattr(self.mpv, 'video_params', None)
+        if params and 'w' in params and 'h' in params:
+            h = params['h']
+            if h > 0:
+                return params['w'] / h
+        return 0.0
