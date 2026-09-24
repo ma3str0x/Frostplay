@@ -35,5 +35,5 @@ jobs:
     - name: Run tests with pytest
       # Using xvfb-run to provide a virtual display for PyQt6 UI tests
       run: |
-        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libegl1 libgl1 libglib2.0-0
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libegl1 libgl1 libglib2.0-0 libxcb-cursor0 libxcb-shape0
         xvfb-run pytest tests/
