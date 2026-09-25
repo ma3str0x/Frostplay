@@ -42,7 +42,10 @@ def main() -> None:
     window = MainWindow()
     window.show()
 
-    sys.exit(app.exec())
+    exit_code = app.exec()
+    del window
+    sys.exit(exit_code)
+
 
 
 if __name__ == "__main__":

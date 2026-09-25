@@ -60,10 +60,11 @@ class TracksPanel(QFrame):
         self.master_vol_slider.valueChanged.connect(self._on_master_vol_changed)
 
         self.master_vol_percent = CaptionLabel("100%")
-        self.master_vol_percent.setFixedWidth(35)
+        self.master_vol_percent.setFixedWidth(45)
         self.master_vol_percent.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
+
 
         master_vol_layout.addWidget(self.master_vol_icon)
         master_vol_layout.addWidget(self.master_vol_label)
@@ -118,6 +119,13 @@ class TracksPanel(QFrame):
         val = self.master_vol_slider.value()
         self.master_vol_percent.setText(f"{val}%")
         self.master_volume_changed.emit(val)
+
+    def set_allow_volume_200(self, allowed: bool) -> None:
+        max_val = 200 if allowed else 100
+        self.master_vol_slider.setMaximum(max_val)
+        if self.master_vol_slider.value() > max_val:
+            self.master_vol_slider.setValue(max_val)
+
 
     def set_tracks(self, tracks: list[Track]) -> None:
         # Clear existing rows

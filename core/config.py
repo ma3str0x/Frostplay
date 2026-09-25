@@ -22,6 +22,10 @@ class Config:
     mpv_path: str | None = None
     ffmpeg_path: str | None = None
     default_folder: str | None = None
+    show_history_thumbnails: bool = True
+    wheel_volume_control: bool = True
+    allow_volume_200: bool = False
+    blanket_fill: bool = True
 
 
 def load_config(config_path: str = CONFIG_PATH) -> Config:
@@ -37,8 +41,13 @@ def load_config(config_path: str = CONFIG_PATH) -> Config:
     return Config(
         mpv_path=data.get("mpv_path"),
         ffmpeg_path=data.get("ffmpeg_path"),
-        default_folder=data.get("default_folder")
+        default_folder=data.get("default_folder"),
+        show_history_thumbnails=data.get("show_history_thumbnails", True),
+        wheel_volume_control=data.get("wheel_volume_control", True),
+        allow_volume_200=data.get("allow_volume_200", False),
+        blanket_fill=data.get("blanket_fill", True),
     )
+
 
 
 def save_config(config: Config, config_path: str = CONFIG_PATH) -> None:

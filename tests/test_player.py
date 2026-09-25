@@ -13,7 +13,7 @@ def test_mpv_player_init() -> None:
 
     # Verify MPV was initialized with correct wid
     import mpv
-    mpv.MPV.assert_called_with(wid="12345", volume_max="150")
+    mpv.MPV.assert_called_with(wid="12345", volume_max="200")
 
     assert player.mpv.keep_open is True
     assert player.mpv.lavfi_complex == ""
@@ -77,3 +77,23 @@ def test_mpv_player_get_position_and_duration() -> None:
 
     player.mpv.duration = None
     assert player.get_duration() == 0.0
+
+
+def test_mpv_player_set_blanket_fill() -> None:
+    player = MpvPlayer()
+    player._video_w = 1920
+    player._video_h = 1080
+
+    # 1. Wider window -> generates blur filter
+    player.set_blanket_fill(2560, 1080, True)
+    assert "[vid1] split=3" in player.mpv.lavfi_complex
+    assert "[vo]" in player.mpv.lavfi_complex
+
+    # 2. Matching window (no black bars) -> passthrough null filter
+    player.set_blanket_fill(1920, 1080, True)
+    assert player.mpv.lavfi_complex == "[vid1] null [vo]"
+
+    # 3. Disabled -> stays on null filter to prevent dropping video track
+    player.set_blanket_fill(1920, 1080, False)
+    assert player.mpv.lavfi_complex == "[vid1] null [vo]"
+

@@ -21,7 +21,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from PyQt6.QtCore import QPoint, QSize, Qt, QTimer, QObject, QEvent
+from PyQt6.QtCore import QPoint, QSize, Qt, QTimer, QObject, QEvent, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QResizeEvent, QShortcut, QIcon, QCursor, QMouseEvent, QCloseEvent
 from PyQt6.QtWidgets import (
     QApplication,
@@ -32,8 +32,14 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import FluentIcon as FIF
-from qfluentwidgets import FluentWindow, NavigationItemPosition
+from qfluentwidgets import (
+    Action,
+    FluentIcon as FIF,
+    FluentWindow,
+    MenuAnimationType,
+    NavigationItemPosition,
+    RoundMenu,
+)
 
 def get_round_icon(image_path: str) -> QIcon:
     from PyQt6.QtGui import QPixmap, QPainter, QPainterPath
@@ -183,13 +189,16 @@ class WindowEdgeResizer(QObject):
 
         return False
 
+from core.media_properties import get_media_properties
 from core.mixer import build_lavfi_complex
 from core.player_interface import PlayerInterface
 from core.types import MixSelection
 from db.history import add_to_history
 from ui.components.history_panel import HistoryPanel
 from ui.components.player_controls import PlayerControls
+from ui.components.properties_dialog import PropertiesDialog
 from ui.components.tracks_panel import TracksPanel
+from ui.components.volume_indicator import VolumeIndicator
 from ui.player_widget import PlayerWidget
 
 
@@ -203,9 +212,15 @@ except (OSError, ImportError):
     HAS_MPV = False
 
 
+class AspectBridge(QObject):
+    aspect_changed = pyqtSignal(float)
+
+
 class MainWindow(FluentWindow):  # type: ignore
     def __init__(self) -> None:
         super().__init__()
+        self._aspect_bridge = AspectBridge(self)
+        self._aspect_bridge.aspect_changed.connect(lambda _: self._update_blanket_fill())
         self.setWindowTitle("Frostplay")
         self.setWindowIcon(get_round_icon("img/Frostplay_logo.png"))
         
@@ -228,6 +243,11 @@ class MainWindow(FluentWindow):  # type: ignore
         self.video_title_label = VideoTitleLabel(self.titleBar)
         self.titleBar.hBoxLayout.insertWidget(5, self.video_title_label, 0, Qt.AlignmentFlag.AlignCenter)
         self.titleBar.hBoxLayout.insertStretch(6, 1)
+
+        self._current_filepath: str | None = None
+        self.prop_shortcut = QShortcut(QKeySequence("Ctrl+I"), self)
+        self.prop_shortcut.activated.connect(self._show_properties_dialog)
+
 
         # Set border width for frameless hit test
         self.BORDER_WIDTH = 10
@@ -257,6 +277,11 @@ class MainWindow(FluentWindow):  # type: ignore
             "QStackedWidget { border: none; border-radius: 0px; background-color: transparent; }"
         )
 
+        self._blanket_fill_timer = QTimer(self)
+        self._blanket_fill_timer.setSingleShot(True)
+        self._blanket_fill_timer.setInterval(120)
+        self._blanket_fill_timer.timeout.connect(self._update_blanket_fill)
+
         self._init_navigation()
         self._init_shortcuts()
 
@@ -280,6 +305,9 @@ class MainWindow(FluentWindow):  # type: ignore
         self.shortcut_c = QShortcut(QKeySequence(Qt.Key.Key_C), self)
         self.shortcut_c.activated.connect(self._toggle_crop)
 
+        self.shortcut_b = QShortcut(QKeySequence(Qt.Key.Key_B), self)
+        self.shortcut_b.activated.connect(self._toggle_blanket_fill)
+
     def _init_navigation(self) -> None:
         # --- Player page ---
         self.player_frame = QFrame()
@@ -302,6 +330,7 @@ class MainWindow(FluentWindow):  # type: ignore
         self.player_widget.doubleClicked.connect(self._toggle_fullscreen)
         self.player_widget.open_requested.connect(self._on_open_video)
         self.player_widget.file_dropped.connect(self._open_file)
+        self.player_widget.wheel_scrolled.connect(self._on_player_wheel_scrolled)
         container_layout.addWidget(self.player_widget, stretch=1)
 
         self.controls = PlayerControls(self.player_container)
@@ -310,6 +339,7 @@ class MainWindow(FluentWindow):  # type: ignore
         self.controls.open_requested.connect(self._on_open_video)
         self.controls.close_requested.connect(self._on_close_video)
         self.controls.btn_tracks.clicked.connect(self._show_tracks_menu)
+        self.controls.btn_more.clicked.connect(self._show_more_menu)
         container_layout.addWidget(self.controls)
 
         main_layout.addWidget(self.player_container, stretch=1)
@@ -318,6 +348,9 @@ class MainWindow(FluentWindow):  # type: ignore
         self.tracks_panel = TracksPanel(self)
         self.tracks_panel.mix_changed.connect(self._on_mix_changed)
         self.tracks_panel.master_volume_changed.connect(self._on_master_volume_changed)
+
+        # Volume OSD indicator (top-right of player)
+        self.volume_indicator = VolumeIndicator(self)
 
 
         self.addSubInterface(
@@ -357,6 +390,11 @@ class MainWindow(FluentWindow):  # type: ignore
         self.settings_panel = SettingsPanel(self.settings_frame)
         settings_layout.addWidget(self.settings_panel)
 
+        self.settings_panel.history_preview_changed.connect(lambda _: self.history_panel.reload_history())
+        self.settings_panel.volume_boost_changed.connect(self.tracks_panel.set_allow_volume_200)
+        self.settings_panel.blanket_fill_changed.connect(self._on_blanket_fill_changed)
+        self.tracks_panel.set_allow_volume_200(self.settings_panel.config.allow_volume_200)
+
         self.addSubInterface(
             self.settings_frame,
             FIF.SETTING,
@@ -391,6 +429,10 @@ class MainWindow(FluentWindow):  # type: ignore
         if hasattr(self, "navigationInterface"):
             QTimer.singleShot(50, self.navigationInterface.update)
             QTimer.singleShot(50, self.update)
+        if hasattr(self, "volume_indicator") and self.volume_indicator.isVisible():
+            self.volume_indicator.show_volume(self.tracks_panel.master_vol_slider.value(), self.player_widget)
+        if hasattr(self, "_blanket_fill_timer"):
+            self._blanket_fill_timer.start()
 
 
 
@@ -407,19 +449,49 @@ class MainWindow(FluentWindow):  # type: ignore
             self.player = MpvPlayer(
                 wid=int(self.player_widget.winId())
             )
+            self.player.set_aspect_ratio_callback(
+                self._aspect_bridge.aspect_changed.emit
+            )
+            from core.config import load_config
+            cfg = load_config()
+            self.player.set_blanket_fill(self.player_widget.width(), self.player_widget.height(), cfg.blanket_fill)
+
+    def changeEvent(self, event: "QEvent | None") -> None:  # type: ignore[name-defined]  # noqa: F821
+        from PyQt6.QtCore import QEvent
+        if event is not None and event.type() == QEvent.Type.WindowStateChange:
+            if self.isMinimized():
+                if hasattr(self, "volume_indicator"):
+                    self.volume_indicator.hide()
+                if hasattr(self, "tracks_panel"):
+                    self.tracks_panel.hide()
+        super().changeEvent(event)
 
     def closeEvent(self, e: "QCloseEvent | None") -> None:
         if hasattr(self, "_resizer"):
             app_inst = QApplication.instance()
             if app_inst:
                 app_inst.removeEventFilter(self._resizer)
+        if hasattr(self, "timer") and self.timer.isActive():
+            self.timer.stop()
+        if hasattr(self, "volume_indicator"):
+            self.volume_indicator.close()
+        if hasattr(self, "tracks_panel"):
+            self.tracks_panel.close()
+        if self.player:
+            try:
+                self.player.destroy()
+            except Exception:
+                pass
+            self.player = None
         super().closeEvent(e)
+
 
     # -- Slots ----------------------------------------------------------
 
     def _open_file(self, filepath: str) -> None:
         if not self.player:
             return
+        self._current_filepath = filepath
         filename = os.path.basename(filepath)
         self.video_title_label.setText(filename)
         self.setWindowTitle(f"Frostplay - {filename}")
@@ -428,7 +500,9 @@ class MainWindow(FluentWindow):  # type: ignore
         self.tracks_panel.set_tracks(self.player.get_tracks())
         add_to_history(filepath)
         self.history_panel.reload_history()
-        
+        QTimer.singleShot(1000, lambda: self._capture_active_thumbnail(filepath))
+        QTimer.singleShot(50, self._update_blanket_fill)
+
         # Hide sidebar to leave purely the video
         self.navigationInterface.hide()
 
@@ -447,6 +521,66 @@ class MainWindow(FluentWindow):  # type: ignore
         else:
             self.tracks_panel.hide()
 
+    def _show_more_menu(self) -> None:
+        menu = RoundMenu(parent=self)
+
+        # Properties action
+        prop_action = Action(FIF.INFO, "Properties", self)
+        prop_action.setShortcut("Ctrl+I")
+        prop_action.triggered.connect(lambda: QTimer.singleShot(50, self._show_properties_dialog))
+        menu.addAction(prop_action)
+
+        menu.addSeparator()
+
+        # Speed submenu
+        speed_menu = RoundMenu("Speed", parent=menu)
+        speed_menu.setIcon(FIF.SPEED_HIGH)
+        current_speed = self.player.get_speed() if self.player else 1.0
+
+        speeds = [
+            (0.25, "0.25x"),
+            (0.5, "0.5x"),
+            (1.0, "1.0x (Normal)"),
+            (1.25, "1.25x"),
+            (1.5, "1.5x"),
+            (2.0, "2.0x"),
+        ]
+
+
+        for s_val, s_label in speeds:
+            act = Action(s_label, self)
+            act.setCheckable(True)
+            if abs(current_speed - s_val) < 0.05:
+                act.setChecked(True)
+            act.triggered.connect(lambda checked, s=s_val: self._set_speed(s))
+            speed_menu.addAction(act)
+
+        menu.addMenu(speed_menu)
+
+        # Blanket fill toggle action
+        from core.config import load_config
+        cfg = load_config()
+        blanket_act = Action(FIF.ZOOM, "Blanket Fill (B)", self)
+        blanket_act.setCheckable(True)
+        blanket_act.setChecked(cfg.blanket_fill)
+        blanket_act.triggered.connect(self._toggle_blanket_fill)
+        menu.addAction(blanket_act)
+
+        # Pop up smoothly above btn_more
+        pos = self.controls.btn_more.mapToGlobal(QPoint(0, 0))
+        menu.exec(pos, aniType=MenuAnimationType.PULL_UP)
+
+    def _set_speed(self, speed: float) -> None:
+        if self.player:
+            self.player.set_speed(speed)
+
+    def _show_properties_dialog(self) -> None:
+        if not self._current_filepath:
+            return
+        props = get_media_properties(self._current_filepath, self.player)
+        dlg = PropertiesDialog(props, self)
+        dlg.exec()
+
     def _on_open_video(self) -> None:
         from core.config import load_config
         config = load_config()
@@ -460,6 +594,7 @@ class MainWindow(FluentWindow):  # type: ignore
             self._open_file(filepath)
 
     def _on_close_video(self) -> None:
+        self._current_filepath = None
         if self.player:
             self.player.close()
         self.video_title_label.setText("")
@@ -486,6 +621,29 @@ class MainWindow(FluentWindow):  # type: ignore
     def _on_master_volume_changed(self, volume: int) -> None:
         if self.player:
             self.player.set_volume(volume)
+
+    def _on_player_wheel_scrolled(self, delta: int) -> None:
+        from core.config import load_config
+        config = load_config()
+        if not config.wheel_volume_control:
+            return
+
+        current_vol = self.tracks_panel.master_vol_slider.value()
+        step = 5 if delta > 0 else -5
+        max_vol = 200 if config.allow_volume_200 else 100
+        new_vol = max(0, min(max_vol, current_vol + step))
+        self.tracks_panel.master_vol_slider.setValue(new_vol)
+        self.volume_indicator.show_volume(new_vol, self.player_widget)
+
+    def _capture_active_thumbnail(self, filepath: str) -> None:
+        from core.thumbnail import get_thumbnail_path
+        thumb_path = get_thumbnail_path(filepath)
+        if not os.path.exists(thumb_path) and self.player and self.player.is_playing():
+            try:
+                self.player.mpv.command("screenshot-to-file", thumb_path, "video")
+                self.history_panel.reload_history()
+            except Exception:
+                pass
 
     def _update_player_state(self) -> None:
         if self.player:
@@ -546,3 +704,32 @@ class MainWindow(FluentWindow):  # type: ignore
             self.player_frame.setStyleSheet("QFrame#Player { border-left: none; }")
             self.player_container.layout().setContentsMargins(0, 0, 0, 0)
             self.player_container.setStyleSheet("SimpleCardWidget#PlayerContainer { background-color: black; border-radius: 0px; border: none; }")
+        QTimer.singleShot(50, self._update_blanket_fill)
+
+    def _update_blanket_fill(self) -> None:
+        if self.player:
+            from core.config import load_config
+            cfg = load_config()
+            self.player.set_blanket_fill(
+                self.player_widget.width(),
+                self.player_widget.height(),
+                cfg.blanket_fill,
+            )
+
+    def _on_blanket_fill_changed(self, enabled: bool) -> None:
+        if self.player:
+            self.player.set_blanket_fill(
+                self.player_widget.width(),
+                self.player_widget.height(),
+                enabled,
+            )
+
+    def _toggle_blanket_fill(self) -> None:
+        from core.config import load_config, save_config
+        cfg = load_config()
+        new_val = not cfg.blanket_fill
+        cfg.blanket_fill = new_val
+        save_config(cfg)
+        if hasattr(self, "settings_panel"):
+            self.settings_panel.blanket_fill_checkbox.setChecked(new_val)
+        self._on_blanket_fill_changed(new_val)

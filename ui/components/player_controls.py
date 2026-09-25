@@ -44,6 +44,11 @@ class PlayerControls(QWidget):
         self.btn_tracks.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_tracks.setEnabled(False)
 
+        self.btn_more = ToolButton(FluentIcon.MORE)
+        self.btn_more.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_more.setEnabled(False)
+        self.btn_more.setToolTip("More options")
+
         self.btn_close = ToolButton(FluentIcon.CLOSE)
         self.btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_close.setEnabled(False)
@@ -55,6 +60,7 @@ class PlayerControls(QWidget):
         layout.addWidget(self.slider)
         layout.addWidget(self.time_label)
         layout.addWidget(self.btn_tracks)
+        layout.addWidget(self.btn_more)
         layout.addWidget(self.btn_open)
         layout.addWidget(self.btn_close)
 
@@ -67,7 +73,9 @@ class PlayerControls(QWidget):
         self.slider.setEnabled(is_loaded)
         self.btn_play.setEnabled(is_loaded)
         self.btn_tracks.setEnabled(is_loaded)
+        self.btn_more.setEnabled(is_loaded)
         self.btn_close.setEnabled(is_loaded)
+
 
     def update_position(self, position: float) -> None:
         if not self.slider.isSliderDown():

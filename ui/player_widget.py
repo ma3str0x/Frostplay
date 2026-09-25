@@ -1,7 +1,7 @@
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent, QDragEnterEvent, QDropEvent
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
-from qfluentwidgets import FluentIcon, IconWidget, TitleLabel, BodyLabel
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
+from qfluentwidgets import BodyLabel, FluentIcon, IconWidget, TitleLabel
 
 
 class PlayerWidget(QWidget):
@@ -10,6 +10,8 @@ class PlayerWidget(QWidget):
     open_requested = pyqtSignal()
     file_dropped = pyqtSignal(str)
     video_aspect_ratio_changed = pyqtSignal(float)
+    wheel_scrolled = pyqtSignal(int)
+
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -50,6 +52,7 @@ class PlayerWidget(QWidget):
         self.label.show()
         self.sub_label.show()
 
+
     def mousePressEvent(self, event: QMouseEvent | None) -> None:
         if event is not None and event.button() == Qt.MouseButton.LeftButton:
             if self._is_empty:
@@ -62,6 +65,16 @@ class PlayerWidget(QWidget):
         if event is not None and event.button() == Qt.MouseButton.LeftButton:
             self.doubleClicked.emit()
         super().mouseDoubleClickEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent | None) -> None:
+        if event is not None:
+            delta = event.angleDelta().y()
+            if delta != 0:
+                self.wheel_scrolled.emit(delta)
+                event.accept()
+                return
+        super().wheelEvent(event)
+
 
     def dragEnterEvent(self, event: QDragEnterEvent | None) -> None:
         if event is not None and event.mimeData().hasUrls():

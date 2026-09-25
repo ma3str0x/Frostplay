@@ -40,9 +40,23 @@ class PlayerInterface(ABC):
     def set_volume(self, volume: int) -> None:
         pass
 
+
+    @abstractmethod
+    def set_speed(self, speed: float) -> None:
+        pass
+
+    @abstractmethod
+    def get_speed(self) -> float:
+        pass
+
     @abstractmethod
     def close(self) -> None:
         pass
+
+    @abstractmethod
+    def destroy(self) -> None:
+        pass
+
 
     @abstractmethod
     def set_aspect_ratio_callback(self, callback) -> None:
@@ -51,3 +65,8 @@ class PlayerInterface(ABC):
     @abstractmethod
     def get_video_ratio(self) -> float:
         pass
+
+    @abstractmethod
+    def set_blanket_fill(self, window_w: int, window_h: int, enabled: bool) -> None:
+        pass
+
