@@ -56,7 +56,9 @@ def compute_blanket_fill_filter(
         return None
 
     split = "[vid1] split=3 [a] [v] [b]"
-    eq_filter = f"eq=contrast={contrast:.2f}:brightness={brightness:.2f}:saturation={saturation:.2f}"
+    eq_filter = (
+        f"eq=contrast={contrast:.2f}:brightness={brightness:.2f}:saturation={saturation:.2f}"
+    )
     blur_filter = "avgblur=sizeX=15:sizeY=15"
 
     if window_aspect > video_aspect:

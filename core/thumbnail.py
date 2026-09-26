@@ -98,7 +98,8 @@ class ThumbnailManager(QObject):
         if video_path not in self._pending and os.path.exists(video_path):
             self._pending.add(video_path)
             worker = ThumbnailWorker(video_path, self._signals)
-            self._pool.start(worker)
+            if self._pool is not None:
+                self._pool.start(worker)
         return None
 
     def _on_ready(self, video_path: str, thumb_path: str) -> None:

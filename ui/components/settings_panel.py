@@ -1,5 +1,5 @@
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QVBoxLayout
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
     CheckBox,
@@ -19,7 +19,7 @@ class SettingsPanel(SimpleCardWidget):  # type: ignore[misc]
     wheel_volume_changed = pyqtSignal(bool)
     blanket_fill_changed = pyqtSignal(bool)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.config = load_config()
 

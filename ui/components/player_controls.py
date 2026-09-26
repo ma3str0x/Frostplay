@@ -5,13 +5,38 @@ from qfluentwidgets import BodyLabel, FluentIcon, Slider, ToolButton
 
 
 class ClickableSlider(Slider):  # type: ignore[misc]
+    hover_moved = pyqtSignal(float, int)
+    hover_left = pyqtSignal()
+
+    def __init__(
+        self, orientation: Qt.Orientation, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(orientation, parent)
+        self.setMouseTracking(True)
+
     def mousePressEvent(self, e: QMouseEvent | None) -> None:
         super().mousePressEvent(e)
-        if e is not None and e.button() == Qt.MouseButton.LeftButton:
+        if e is not None and e.button() == Qt.MouseButton.LeftButton and self.width() > 0:
             x_pos = e.position().x()
             val = self.minimum() + ((self.maximum() - self.minimum()) * x_pos) / self.width()
             self.setValue(int(val))
             self.sliderMoved.emit(self.value())
+
+    def mouseMoveEvent(self, e: QMouseEvent | None) -> None:
+        if e is not None and (e.buttons() & Qt.MouseButton.LeftButton):
+            super().mouseMoveEvent(e)
+        elif e is not None:
+            e.accept()
+
+        if e is not None and self.width() > 0 and self.maximum() > self.minimum():
+            x_pos = max(0.0, min(float(e.position().x()), float(self.width())))
+            fraction = x_pos / float(self.width())
+            seconds = self.minimum() + (self.maximum() - self.minimum()) * fraction
+            self.hover_moved.emit(float(seconds), int(x_pos))
+
+    def leaveEvent(self, e: object) -> None:
+        super().leaveEvent(e)
+        self.hover_left.emit()
 
 
 class PlayerControls(QWidget):
@@ -19,6 +44,8 @@ class PlayerControls(QWidget):
     seek_requested = pyqtSignal(float)
     open_requested = pyqtSignal()
     close_requested = pyqtSignal()
+    slider_hover_moved = pyqtSignal(float, int)
+    slider_hover_left = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -33,6 +60,8 @@ class PlayerControls(QWidget):
         self.slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.slider.setEnabled(False)
         self.slider.sliderMoved.connect(self._on_slider_moved)
+        self.slider.hover_moved.connect(self.slider_hover_moved.emit)
+        self.slider.hover_left.connect(self.slider_hover_left.emit)
 
         self.time_label = BodyLabel("00:00 / 00:00")
 

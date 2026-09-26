@@ -1,10 +1,8 @@
 import sqlite3
 from datetime import datetime
 
-from db.schema import init_db
-
-
 from core.config import DB_PATH
+from db.schema import init_db
 
 
 def add_to_history(file_path: str, db_path: str = DB_PATH) -> None:

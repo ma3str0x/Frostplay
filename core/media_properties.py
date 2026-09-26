@@ -4,6 +4,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -33,7 +34,7 @@ def format_duration(seconds: float | None) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def get_media_properties(filepath: str, player=None) -> MediaProperties:
+def get_media_properties(filepath: str, player: Any = None) -> MediaProperties:
     props = MediaProperties()
     if not filepath or not os.path.exists(filepath):
         return props
@@ -135,7 +136,8 @@ def get_media_properties(filepath: str, player=None) -> MediaProperties:
                         props.length = format_duration(float(dur_str))
 
                 tags = format_info.get("tags", {})
-                if tags.get("title") and props.title == os.path.splitext(os.path.basename(norm_path))[0]:
+                base_title = os.path.splitext(os.path.basename(norm_path))[0]
+                if tags.get("title") and props.title == base_title:
                     props.title = tags["title"]
                 if tags.get("artist") and props.artists == "-":
                     props.artists = tags["artist"]
@@ -166,7 +168,8 @@ def get_media_properties(filepath: str, player=None) -> MediaProperties:
                         elif ch == 2:
                             props.audio_channels = "2 (stereo)"
                         elif ch:
-                            props.audio_channels = f"{ch} ({layout})" if layout else f"{ch} channels"
+                            desc = f"{ch} ({layout})" if layout else f"{ch} channels"
+                            props.audio_channels = desc
         except Exception:
             pass
 

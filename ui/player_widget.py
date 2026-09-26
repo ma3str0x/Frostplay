@@ -19,21 +19,21 @@ class PlayerWidget(QWidget):
         self.setStyleSheet("#PlayerWidget { background-color: transparent; }")
         self.setAcceptDrops(True)
         self._is_empty = True
-        
+
         self.v_layout = QVBoxLayout(self)
         self.v_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.v_layout.setSpacing(16)
-        
+
         self.icon_widget = IconWidget(FluentIcon.VIDEO)
         self.icon_widget.setFixedSize(64, 64)
-        
+
         self.label = TitleLabel("Frostplay")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
+
         self.sub_label = BodyLabel("Open a video file to start playing")
         self.sub_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.sub_label.setStyleSheet("color: rgba(255, 255, 255, 0.5);")
-        
+
         self.v_layout.addWidget(self.icon_widget, 0, Qt.AlignmentFlag.AlignHCenter)
         self.v_layout.addWidget(self.label, 0, Qt.AlignmentFlag.AlignHCenter)
         self.v_layout.addWidget(self.sub_label, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -77,14 +77,18 @@ class PlayerWidget(QWidget):
 
 
     def dragEnterEvent(self, event: QDragEnterEvent | None) -> None:
-        if event is not None and event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            
+        if event is not None:
+            mime = event.mimeData()
+            if mime is not None and mime.hasUrls():
+                event.acceptProposedAction()
+
     def dropEvent(self, event: QDropEvent | None) -> None:
-        if event is not None and event.mimeData().hasUrls():
-            urls = event.mimeData().urls()
-            if urls:
-                filepath = urls[0].toLocalFile()
-                if filepath:
-                    self.file_dropped.emit(filepath)
-            event.acceptProposedAction()
+        if event is not None:
+            mime = event.mimeData()
+            if mime is not None and mime.hasUrls():
+                urls = mime.urls()
+                if urls:
+                    filepath = urls[0].toLocalFile()
+                    if filepath:
+                        self.file_dropped.emit(filepath)
+                event.acceptProposedAction()

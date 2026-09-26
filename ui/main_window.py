@@ -1,28 +1,18 @@
 import os
-import sys
 
-# Ensure project root is in PATH so python-mpv can find mpv-2.dll
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-os.environ["PATH"] = current_dir + os.pathsep + os.environ.get("PATH", "")
-if hasattr(os, "add_dll_directory"):
-    try:
-        os.add_dll_directory(current_dir)
-    except Exception:
-        pass
-
-if sys.platform == "win32":
-    try:
-        import win32api
-        from PyQt6.QtGui import QCursor
-        def _safe_get_cursor_pos() -> tuple[int, int]:
-            pos = QCursor.pos()
-            return (pos.x(), pos.y())
-        win32api.GetCursorPos = _safe_get_cursor_pos
-    except Exception:
-        pass
-
-from PyQt6.QtCore import QPoint, QSize, Qt, QTimer, QObject, QEvent, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QResizeEvent, QShortcut, QIcon, QCursor, QMouseEvent, QCloseEvent
+from PyQt6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import (
+    QCloseEvent,
+    QCursor,
+    QIcon,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+    QResizeEvent,
+    QShortcut,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -34,23 +24,48 @@ from PyQt6.QtWidgets import (
 )
 from qfluentwidgets import (
     Action,
-    FluentIcon as FIF,
     FluentWindow,
     MenuAnimationType,
     NavigationItemPosition,
     RoundMenu,
+    SimpleCardWidget,
+)
+from qfluentwidgets import (
+    FluentIcon as FIF,
 )
 
+from core.config import load_config
+from core.media_properties import get_media_properties
+from core.mixer import build_lavfi_complex
+from core.player_interface import PlayerInterface
+from core.preview_generator import PreviewGenerator
+from core.types import MixSelection
+from db.history import add_to_history
+from ui.components.history_panel import HistoryPanel
+from ui.components.player_controls import PlayerControls
+from ui.components.properties_dialog import PropertiesDialog
+from ui.components.timeline_preview import TimelinePreview
+from ui.components.tracks_panel import TracksPanel
+from ui.components.volume_indicator import VolumeIndicator
+from ui.player_widget import PlayerWidget
+
+try:
+    from core.player import MpvPlayer
+
+    HAS_MPV = True
+except (OSError, ImportError):
+    HAS_MPV = False
+
+
 def get_round_icon(image_path: str) -> QIcon:
-    from PyQt6.QtGui import QPixmap, QPainter, QPainterPath
     from PyQt6.QtCore import Qt
     img = QPixmap(image_path)
     size = min(img.width(), img.height())
     img = img.copy((img.width() - size)//2, (img.height() - size)//2, size, size)
-    
+
     out_pix = QPixmap(size, size)
     out_pix.fill(Qt.GlobalColor.transparent)
-    
+
     painter = QPainter(out_pix)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     path = QPainterPath()
@@ -58,7 +73,7 @@ def get_round_icon(image_path: str) -> QIcon:
     painter.setClipPath(path)
     painter.drawPixmap(0, 0, img)
     painter.end()
-    
+
     return QIcon(out_pix)
 
 class VideoTitleLabel(QLabel):
@@ -69,11 +84,12 @@ class VideoTitleLabel(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setStyleSheet(
-            "QLabel { color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 500; background: transparent; }"
+            "QLabel { color: rgba(255, 255, 255, 0.85); "
+            "font-size: 13px; font-weight: 500; background: transparent; }"
         )
 
-    def setText(self, text: str) -> None:
-        self._full_text = text
+    def setText(self, text: str | None) -> None:
+        self._full_text = text or ""
         self.updateGeometry()
         self._update_text()
 
@@ -189,28 +205,6 @@ class WindowEdgeResizer(QObject):
 
         return False
 
-from core.media_properties import get_media_properties
-from core.mixer import build_lavfi_complex
-from core.player_interface import PlayerInterface
-from core.types import MixSelection
-from db.history import add_to_history
-from ui.components.history_panel import HistoryPanel
-from ui.components.player_controls import PlayerControls
-from ui.components.properties_dialog import PropertiesDialog
-from ui.components.tracks_panel import TracksPanel
-from ui.components.volume_indicator import VolumeIndicator
-from ui.player_widget import PlayerWidget
-
-
-
-
-try:
-    from core.player import MpvPlayer
-
-    HAS_MPV = True
-except (OSError, ImportError):
-    HAS_MPV = False
-
 
 class AspectBridge(QObject):
     aspect_changed = pyqtSignal(float)
@@ -223,8 +217,8 @@ class MainWindow(FluentWindow):  # type: ignore
         self._aspect_bridge.aspect_changed.connect(lambda _: self._update_blanket_fill())
         self.setWindowTitle("Frostplay")
         self.setWindowIcon(get_round_icon("img/Frostplay_logo.png"))
-        
-        # Configure the title bar icon (round logo placed in TitleBar at top-left next to 'Frostplay')
+
+        # Configure the title bar icon (round logo placed at top-left)
         self.titleBar.hBoxLayout.insertSpacing(0, 12)
         self.titleBar.iconLabel.setFixedSize(22, 22)
         self.titleBar.iconLabel.setPixmap(get_round_icon("img/Frostplay_logo.png").pixmap(22, 22))
@@ -236,12 +230,14 @@ class MainWindow(FluentWindow):  # type: ignore
         except Exception:
             pass
 
-        # Compensate spacing so title label is mathematically centered between left icon/text and right buttons
+        # Compensate spacing so title label is mathematically centered
         self.titleBar.hBoxLayout.insertSpacing(3, 37)
 
         # Centered video title in the TitleBar
         self.video_title_label = VideoTitleLabel(self.titleBar)
-        self.titleBar.hBoxLayout.insertWidget(5, self.video_title_label, 0, Qt.AlignmentFlag.AlignCenter)
+        self.titleBar.hBoxLayout.insertWidget(
+            5, self.video_title_label, 0, Qt.AlignmentFlag.AlignCenter
+        )
         self.titleBar.hBoxLayout.insertStretch(6, 1)
 
         self._current_filepath: str | None = None
@@ -282,6 +278,10 @@ class MainWindow(FluentWindow):  # type: ignore
         self._blanket_fill_timer.setInterval(120)
         self._blanket_fill_timer.timeout.connect(self._update_blanket_fill)
 
+        self.preview_generator = PreviewGenerator(self)
+        self.preview_generator.frame_available.connect(self._on_preview_frame_available)
+        self.timeline_preview = TimelinePreview(self)
+
         self._init_navigation()
         self._init_shortcuts()
 
@@ -317,7 +317,6 @@ class MainWindow(FluentWindow):  # type: ignore
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(0)
 
-        from qfluentwidgets import SimpleCardWidget
         self.player_container = SimpleCardWidget(self.player_frame)
         self.player_container.setObjectName("PlayerContainer")
 
@@ -340,6 +339,8 @@ class MainWindow(FluentWindow):  # type: ignore
         self.controls.close_requested.connect(self._on_close_video)
         self.controls.btn_tracks.clicked.connect(self._show_tracks_menu)
         self.controls.btn_more.clicked.connect(self._show_more_menu)
+        self.controls.slider_hover_moved.connect(self._on_timeline_hover_moved)
+        self.controls.slider_hover_left.connect(self._on_timeline_hover_left)
         container_layout.addWidget(self.controls)
 
         main_layout.addWidget(self.player_container, stretch=1)
@@ -390,7 +391,9 @@ class MainWindow(FluentWindow):  # type: ignore
         self.settings_panel = SettingsPanel(self.settings_frame)
         settings_layout.addWidget(self.settings_panel)
 
-        self.settings_panel.history_preview_changed.connect(lambda _: self.history_panel.reload_history())
+        self.settings_panel.history_preview_changed.connect(
+            lambda _: self.history_panel.reload_history()
+        )
         self.settings_panel.volume_boost_changed.connect(self.tracks_panel.set_allow_volume_200)
         self.settings_panel.blanket_fill_changed.connect(self._on_blanket_fill_changed)
         self.tracks_panel.set_allow_volume_200(self.settings_panel.config.allow_volume_200)
@@ -417,9 +420,10 @@ class MainWindow(FluentWindow):  # type: ignore
 
 
         # Add visual separator between sidebar and content
-        self.player_frame.setStyleSheet("QFrame#Player { border-left: 1px solid rgba(255, 255, 255, 0.08); }")
-        self.history_frame.setStyleSheet("QFrame#HistoryFrame { border-left: 1px solid rgba(255, 255, 255, 0.08); }")
-        self.settings_frame.setStyleSheet("QFrame#SettingsFrame { border-left: 1px solid rgba(255, 255, 255, 0.08); }")
+        b_border = "border-left: 1px solid rgba(255, 255, 255, 0.08);"
+        self.player_frame.setStyleSheet(f"QFrame#Player {{ {b_border} }}")
+        self.history_frame.setStyleSheet(f"QFrame#HistoryFrame {{ {b_border} }}")
+        self.settings_frame.setStyleSheet(f"QFrame#SettingsFrame {{ {b_border} }}")
 
     def resizeEvent(self, e: "QResizeEvent | None") -> None:
         super().resizeEvent(e)
@@ -430,7 +434,8 @@ class MainWindow(FluentWindow):  # type: ignore
             QTimer.singleShot(50, self.navigationInterface.update)
             QTimer.singleShot(50, self.update)
         if hasattr(self, "volume_indicator") and self.volume_indicator.isVisible():
-            self.volume_indicator.show_volume(self.tracks_panel.master_vol_slider.value(), self.player_widget)
+            vol = self.tracks_panel.master_vol_slider.value()
+            self.volume_indicator.show_volume(vol, self.player_widget)
         if hasattr(self, "_blanket_fill_timer"):
             self._blanket_fill_timer.start()
 
@@ -454,10 +459,13 @@ class MainWindow(FluentWindow):  # type: ignore
             )
             from core.config import load_config
             cfg = load_config()
-            self.player.set_blanket_fill(self.player_widget.width(), self.player_widget.height(), cfg.blanket_fill)
+            self.player.set_blanket_fill(
+                self.player_widget.width(),
+                self.player_widget.height(),
+                cfg.blanket_fill,
+            )
 
-    def changeEvent(self, event: "QEvent | None") -> None:  # type: ignore[name-defined]  # noqa: F821
-        from PyQt6.QtCore import QEvent
+    def changeEvent(self, event: QEvent | None) -> None:
         if event is not None and event.type() == QEvent.Type.WindowStateChange:
             if self.isMinimized():
                 if hasattr(self, "volume_indicator"):
@@ -477,6 +485,10 @@ class MainWindow(FluentWindow):  # type: ignore
             self.volume_indicator.close()
         if hasattr(self, "tracks_panel"):
             self.tracks_panel.close()
+        if hasattr(self, "timeline_preview"):
+            self.timeline_preview.close()
+        if hasattr(self, "preview_generator"):
+            self.preview_generator.close()
         if self.player:
             try:
                 self.player.destroy()
@@ -497,6 +509,7 @@ class MainWindow(FluentWindow):  # type: ignore
         self.setWindowTitle(f"Frostplay - {filename}")
         self.player_widget.hide_placeholder()
         self.player.open(filepath)
+        self.preview_generator.load_video(filepath)
         self.tracks_panel.set_tracks(self.player.get_tracks())
         add_to_history(filepath)
         self.history_panel.reload_history()
@@ -510,7 +523,7 @@ class MainWindow(FluentWindow):  # type: ignore
         if self.tracks_panel.isHidden():
             # Ensure the panel has calculated its final size before positioning
             self.tracks_panel.adjustSize()
-            
+
             # Place in the bottom right, above the player controls
             top_right_of_controls = self.controls.mapToGlobal(QPoint(self.controls.width(), 0))
             self.tracks_panel.move(
@@ -558,9 +571,8 @@ class MainWindow(FluentWindow):  # type: ignore
         menu.addMenu(speed_menu)
 
         # Blanket fill toggle action
-        from core.config import load_config
         cfg = load_config()
-        blanket_act = Action(FIF.ZOOM, "Blanket Fill (B)", self)
+        blanket_act = Action(FIF.ZOOM, "Blanket Fill", self)
         blanket_act.setCheckable(True)
         blanket_act.setChecked(cfg.blanket_fill)
         blanket_act.triggered.connect(self._toggle_blanket_fill)
@@ -582,7 +594,6 @@ class MainWindow(FluentWindow):  # type: ignore
         dlg.exec()
 
     def _on_open_video(self) -> None:
-        from core.config import load_config
         config = load_config()
         filepath, _ = QFileDialog.getOpenFileName(
             self,
@@ -604,9 +615,27 @@ class MainWindow(FluentWindow):  # type: ignore
         self.controls.update_position(0.0)
         self.tracks_panel.set_tracks([])
         self.tracks_panel.hide()
-        
+        if hasattr(self, "timeline_preview"):
+            self.timeline_preview.hide()
+        if hasattr(self, "preview_generator"):
+            self.preview_generator.close()
+
         # Show sidebar again
         self.navigationInterface.show()
+
+    def _on_timeline_hover_moved(self, seconds: float, x_in_slider: int) -> None:
+        if self._current_filepath and self.controls.slider.isEnabled():
+            pix = self.preview_generator.get_preview(seconds)
+            self.timeline_preview.set_preview(seconds, pix)
+            self.timeline_preview.position_above(self.controls.slider, x_in_slider)
+
+    def _on_timeline_hover_left(self) -> None:
+        if hasattr(self, "timeline_preview"):
+            self.timeline_preview.hide()
+
+    def _on_preview_frame_available(self, sec: int, pixmap: QPixmap) -> None:
+        if hasattr(self, "timeline_preview") and self.timeline_preview.isVisible():
+            self.timeline_preview.update_pixmap_if_matching(sec, pixmap)
 
     def _on_history_file_selected(self, filepath: str) -> None:
         self._open_file(filepath)
@@ -623,7 +652,6 @@ class MainWindow(FluentWindow):  # type: ignore
             self.player.set_volume(volume)
 
     def _on_player_wheel_scrolled(self, delta: int) -> None:
-        from core.config import load_config
         config = load_config()
         if not config.wheel_volume_control:
             return
@@ -640,8 +668,10 @@ class MainWindow(FluentWindow):  # type: ignore
         thumb_path = get_thumbnail_path(filepath)
         if not os.path.exists(thumb_path) and self.player and self.player.is_playing():
             try:
-                self.player.mpv.command("screenshot-to-file", thumb_path, "video")
-                self.history_panel.reload_history()
+                mpv_obj = getattr(self.player, "mpv", None)
+                if mpv_obj is not None:
+                    mpv_obj.command("screenshot-to-file", thumb_path, "video")
+                    self.history_panel.reload_history()
             except Exception:
                 pass
 
@@ -681,29 +711,39 @@ class MainWindow(FluentWindow):  # type: ignore
         if not self.player:
             return
         # Toggle panscan in mpv to fill the screen (crop) or show black bars
-        current = getattr(self.player.mpv, 'panscan', 0.0)
-        if current > 0.5:
-            self.player.mpv.panscan = 0.0
-        else:
-            self.player.mpv.panscan = 1.0
+        mpv_obj = getattr(self.player, "mpv", None)
+        if mpv_obj is not None:
+            current = float(getattr(mpv_obj, "panscan", 0.0) or 0.0)
+            setattr(mpv_obj, "panscan", 0.0 if current > 0.5 else 1.0)
 
     def _toggle_fullscreen(self) -> None:
+        pf_layout = self.player_frame.layout()
+        pc_layout = self.player_container.layout()
         if self.isFullScreen():
             self.showNormal()
             self.titleBar.show()
             self.navigationInterface.show()
-            self.player_frame.layout().setContentsMargins(10, 10, 10, 10)
-            self.player_frame.setStyleSheet("QFrame#Player { border-left: 1px solid rgba(255, 255, 255, 0.08); }")
-            self.player_container.layout().setContentsMargins(10, 10, 10, 10)
+            if pf_layout is not None:
+                pf_layout.setContentsMargins(10, 10, 10, 10)
+            self.player_frame.setStyleSheet(
+                "QFrame#Player { border-left: 1px solid rgba(255, 255, 255, 0.08); }"
+            )
+            if pc_layout is not None:
+                pc_layout.setContentsMargins(10, 10, 10, 10)
             self.player_container.setStyleSheet("")
         else:
             self.showFullScreen()
             self.titleBar.hide()
             self.navigationInterface.hide()
-            self.player_frame.layout().setContentsMargins(0, 0, 0, 0)
+            if pf_layout is not None:
+                pf_layout.setContentsMargins(0, 0, 0, 0)
             self.player_frame.setStyleSheet("QFrame#Player { border-left: none; }")
-            self.player_container.layout().setContentsMargins(0, 0, 0, 0)
-            self.player_container.setStyleSheet("SimpleCardWidget#PlayerContainer { background-color: black; border-radius: 0px; border: none; }")
+            if pc_layout is not None:
+                pc_layout.setContentsMargins(0, 0, 0, 0)
+            self.player_container.setStyleSheet(
+                "SimpleCardWidget#PlayerContainer { "
+                "background-color: black; border-radius: 0px; border: none; }"
+            )
         QTimer.singleShot(50, self._update_blanket_fill)
 
     def _update_blanket_fill(self) -> None:
@@ -725,7 +765,7 @@ class MainWindow(FluentWindow):  # type: ignore
             )
 
     def _toggle_blanket_fill(self) -> None:
-        from core.config import load_config, save_config
+        from core.config import save_config
         cfg = load_config()
         new_val = not cfg.blanket_fill
         cfg.blanket_fill = new_val

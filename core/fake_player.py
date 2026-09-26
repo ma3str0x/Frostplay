@@ -46,8 +46,20 @@ class FakePlayer(PlayerInterface):
         self.current_position = 0.0
         self.last_mix = ""
 
-    def set_aspect_ratio_callback(self, callback) -> None:
+    def set_speed(self, speed: float) -> None:
+        pass
+
+    def get_speed(self) -> float:
+        return 1.0
+
+    def destroy(self) -> None:
+        self.close()
+
+    def set_aspect_ratio_callback(self, callback: object) -> None:
         pass
 
     def get_video_ratio(self) -> float:
         return 1.777  # Default 16:9
+
+    def set_blanket_fill(self, window_w: int, window_h: int, enabled: bool) -> None:
+        pass

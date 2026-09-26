@@ -22,7 +22,9 @@ class VolumeIndicator(QWidget):
         self.icon_widget.setFixedSize(20, 20)
 
         self.label = QLabel("100%", self)
-        self.label.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 600; background: transparent;")
+        self.label.setStyleSheet(
+            "color: #ffffff; font-size: 14px; font-weight: 600; background: transparent;"
+        )
 
         layout.addWidget(self.icon_widget)
         layout.addWidget(self.label)
@@ -41,7 +43,7 @@ class VolumeIndicator(QWidget):
 
         self.hide()
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: object) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -86,7 +88,12 @@ class VolumeIndicator(QWidget):
 
         self._timer.start()
 
-    def show_message(self, text: str, icon: FluentIcon = FluentIcon.VIEW, anchor_widget: QWidget | None = None) -> None:
+    def show_message(
+        self,
+        text: str,
+        icon: FluentIcon = FluentIcon.VIEW,
+        anchor_widget: QWidget | None = None,
+    ) -> None:
         white = QColor(255, 255, 255)
         self.icon_widget.setIcon(icon.icon(color=white))
         self.label.setText(text)

@@ -1,3 +1,5 @@
+from typing import Any
+
 import mpv
 
 from core.player_interface import PlayerInterface
@@ -21,7 +23,7 @@ class MpvPlayer(PlayerInterface):
         self._video_w: int = 0
         self._video_h: int = 0
         self._video_par: float = 1.0
-        self._aspect_callback = None
+        self._aspect_callback: Any = None
 
         kwargs: dict[str, str] = {}
         if wid is not None:
@@ -33,8 +35,8 @@ class MpvPlayer(PlayerInterface):
         self.mpv.keep_open = True
         self.mpv.lavfi_complex = ""
 
-        @self.mpv.property_observer('video-params')
-        def on_video_params(name, value):
+        @self.mpv.property_observer('video-params')  # type: ignore[untyped-decorator]
+        def on_video_params(name: str, value: Any) -> None:
             if value and 'w' in value and 'h' in value:
                 # Capture base video dimensions when blur filter is not expanding them
                 if not self._video_lavfi:
@@ -171,15 +173,15 @@ class MpvPlayer(PlayerInterface):
         except Exception:
             pass
 
-    def set_aspect_ratio_callback(self, callback) -> None:
+    def set_aspect_ratio_callback(self, callback: object) -> None:
         self._aspect_callback = callback
 
     def get_video_ratio(self) -> float:
         if self._video_w > 0 and self._video_h > 0:
-            return (self._video_w * self._video_par) / self._video_h
+            return float((self._video_w * self._video_par) / self._video_h)
         params = getattr(self.mpv, 'video_params', None)
         if params and 'w' in params and 'h' in params:
             h = params['h']
             if h > 0:
-                return params['w'] / h
+                return float(params['w'] / h)
         return 0.0

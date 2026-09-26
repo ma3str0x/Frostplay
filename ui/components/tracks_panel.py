@@ -1,6 +1,6 @@
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent, QPainter
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget, QStyle, QStyleOption
+from PyQt6.QtGui import QMouseEvent, QPainter, QPaintEvent
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QStyle, QStyleOption, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
@@ -91,11 +91,13 @@ class TracksPanel(QFrame):
 
         self._drag_pos: QPoint | None = None
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         opt = QStyleOption()
         opt.initFrom(self)
         p = QPainter(self)
-        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
+        s = self.style()
+        if s is not None:
+            s.drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
         super().paintEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent | None) -> None:

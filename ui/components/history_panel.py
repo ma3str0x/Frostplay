@@ -1,7 +1,7 @@
 import os
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPixmap
+from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -24,7 +24,9 @@ from core.thumbnail import get_thumbnail_manager, get_thumbnail_path, has_thumbn
 from db.history import get_history
 
 
-def make_rounded_pixmap(pixmap: QPixmap, width: int = 100, height: int = 56, radius: int = 6) -> QPixmap:
+def make_rounded_pixmap(
+    pixmap: QPixmap, width: int = 100, height: int = 56, radius: int = 6
+) -> QPixmap:
     target = QPixmap(width, height)
     target.fill(Qt.GlobalColor.transparent)
     painter = QPainter(target)
@@ -70,7 +72,9 @@ def create_placeholder_pixmap(width: int = 100, height: int = 56, radius: int = 
 
 
 class HistoryItemWidget(QWidget):
-    def __init__(self, filepath: str, show_thumbnail: bool = True, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, filepath: str, show_thumbnail: bool = True, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.filepath = filepath
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -79,13 +83,12 @@ class HistoryItemWidget(QWidget):
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(14)
 
+        self.thumb_label: QLabel | None = None
         if show_thumbnail:
             self.thumb_label = QLabel(self)
             self.thumb_label.setFixedSize(100, 56)
             self._load_or_request_thumbnail()
             layout.addWidget(self.thumb_label)
-        else:
-            self.thumb_label = None
 
         text_layout = QVBoxLayout()
         text_layout.setContentsMargins(0, 2, 0, 2)

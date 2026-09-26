@@ -59,7 +59,7 @@ class PlayerInterface(ABC):
 
 
     @abstractmethod
-    def set_aspect_ratio_callback(self, callback) -> None:
+    def set_aspect_ratio_callback(self, callback: object) -> None:
         pass
 
     @abstractmethod

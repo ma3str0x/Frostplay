@@ -43,8 +43,7 @@ def main() -> None:
     window.show()
 
     exit_code = app.exec()
-    del window
-    sys.exit(exit_code)
+    os._exit(exit_code)
 
 
 
