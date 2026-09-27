@@ -64,9 +64,9 @@ Abstract base class for all player implementations.
 ## `core/player.py` — MpvPlayer Implementation
 
 ### `MpvPlayer(PlayerInterface)`
-
+ 
 Player implementation via `python-mpv` (libmpv).
-
+ 
 **Constructor:**
 ```python
 MpvPlayer(wid: int | None = None, ffprobe_path: str = "ffprobe")
@@ -75,12 +75,17 @@ MpvPlayer(wid: int | None = None, ffprobe_path: str = "ffprobe")
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `wid` | `int \| None` | Window ID for embedding video in a Qt widget |
-| `ffprobe_path` | `str` | Path to ffprobe |
+| `ffprobe_path` | `str` | Path to ffprobe (fallback inspection) |
 
-**Important details:**
-- `volume_max` is set to `150` so mpv doesn't reject values >100
+**Important details & methods:**
+- `volume_max` is set to `200` to support volume amplification up to 200%
 - `keep_open = True` — the window doesn't close after the file ends
-- `inspect_tracks()` is automatically called on `open()`
+- `set_tracks_callback(callback: Callable[[list[Track]], None])` — registers a callback invoked whenever `libmpv`'s `track-list` property observer emits new tracks
+- `open(filepath: str)` — initiates non-blocking playback immediately without spawning synchronous child processes
+- `set_blanket_fill(viewport_w: int, viewport_h: int, enabled: bool)` — computes video aspect ratio and activates dynamic lavfi ambient blurred background (`split`, `scale`, `gblur`, `overlay`)
+- `set_speed(speed: float)` — adjusts playback speed
+- `close()` — closes current media file and resets internal state
+
 
 ---
 
@@ -137,17 +142,27 @@ Runs `ffprobe` to get the list of audio tracks from a media file.
 ## `core/config.py` — Configuration
 
 ### `Config`
-
+ 
 ```python
 @dataclass
 class Config:
     mpv_path: str | None = None
     ffmpeg_path: str | None = None
+    default_folder: str | None = None
+    show_history_thumbnails: bool = True
+    wheel_volume_control: bool = True
+    allow_volume_200: bool = False
+    blanket_fill: bool = False
 ```
 
-### `load_config(config_path: str = "config.json") -> Config`
+### `load_config(config_path: str = CONFIG_PATH) -> Config`
 
-Loads configuration from a JSON file. Returns a default `Config()` if the file doesn't exist.
+Loads configuration from JSON file (located in `%LOCALAPPDATA%\Frostplay\config.json` on Windows). Returns default `Config()` if the file doesn't exist.
+
+### `save_config(config: Config, config_path: str = CONFIG_PATH) -> None`
+
+Saves application configuration to JSON file.
+
 
 ---
 
@@ -288,10 +303,35 @@ Card for an individual audio track with checkbox and volume slider.
 
 ### `HistoryPanel(QFrame)`
 
-List of recently opened files with double-click to open.
+List of recently opened files with double-click to open. Supports thumbnail rendering with fallback placeholders.
 
 **Signals:**
 - `file_selected(str)` — double-click on a list item
 
 **Public methods:**
-- `reload_history()` — reload list from DB
+- `reload_history()` — reload list from DB and update preview items
+
+---
+
+## `ui/components/settings_panel.py` — Settings Panel
+
+### `SettingsPanel(SimpleCardWidget)`
+
+Settings interface card for customizing player behaviors.
+
+**Signals:**
+
+| Signal | Type | Description |
+|--------|------|-------------|
+| `history_preview_changed` | `(bool)` | Emitted when history thumbnails toggle is switched |
+| `volume_boost_changed` | `(bool)` | Emitted when 200% volume boost is toggled |
+| `wheel_volume_changed` | `(bool)` | Emitted when mouse wheel volume control is toggled |
+| `blanket_fill_changed` | `(bool)` | Emitted when blanket fill default is toggled |
+
+**Settings managed:**
+- Default video folder path (`QLineEdit` + browse button)
+- Show video previews in history (`CheckBox`)
+- Control volume with mouse wheel (`CheckBox`)
+- Allow volume boost up to 200% (`CheckBox`)
+- Blanket Fill mode (`CheckBox`)
+

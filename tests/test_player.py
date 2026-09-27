@@ -11,26 +11,35 @@ from core.types import Track  # noqa: E402
 def test_mpv_player_init() -> None:
     player = MpvPlayer(wid=12345)
 
-    # Verify MPV was initialized with correct wid
+    # Verify MPV was initialized with correct wid and hardware decoding options
     import mpv
-    mpv.MPV.assert_called_with(wid="12345", volume_max="200")
+    mpv.MPV.assert_called_with(
+        wid="12345",
+        hwdec="auto-safe",
+        vo="gpu",
+        terminal="no",
+        msg_level="all=no",
+        input_default_bindings="no",
+        input_vo_keyboard="no",
+        cursor_autohide="no",
+        volume_max="200",
+    )
 
     assert player.mpv.keep_open is True
     assert player.mpv.lavfi_complex == ""
 
 
-@patch("core.player.inspect_tracks")
-def test_mpv_player_open(mock_inspect_tracks: MagicMock) -> None:
-    mock_inspect_tracks.return_value = [
-        Track(index=1, language="eng", codec="aac")
-    ]
-
+def test_mpv_player_open() -> None:
     player = MpvPlayer()
+    player.mpv.track_list = [
+        {"type": "audio", "id": 1, "lang": "eng", "codec": "aac"}
+    ]
     player.open("test.mkv")
 
-    mock_inspect_tracks.assert_called_once_with("test.mkv", ffprobe_path="ffprobe")
     player.mpv.play.assert_called_once_with("test.mkv")
-    assert player.get_tracks() == mock_inspect_tracks.return_value
+    assert player.get_tracks() == [
+        Track(index=1, language="eng", codec="aac")
+    ]
 
 
 def test_mpv_player_play_pause() -> None:

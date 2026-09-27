@@ -25,7 +25,7 @@ class Config:
     show_history_thumbnails: bool = True
     wheel_volume_control: bool = True
     allow_volume_200: bool = False
-    blanket_fill: bool = True
+    blanket_fill: bool = False
 
 
 def load_config(config_path: str = CONFIG_PATH) -> Config:
@@ -45,7 +45,7 @@ def load_config(config_path: str = CONFIG_PATH) -> Config:
         show_history_thumbnails=data.get("show_history_thumbnails", True),
         wheel_volume_control=data.get("wheel_volume_control", True),
         allow_volume_200=data.get("allow_volume_200", False),
-        blanket_fill=data.get("blanket_fill", True),
+        blanket_fill=data.get("blanket_fill", False),
     )
 
 

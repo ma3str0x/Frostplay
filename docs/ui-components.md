@@ -192,12 +192,41 @@ Page with a list of recently opened files.
 | `file_selected` | `(str)` | Double-click on a list item |
 
 ### Auto-loading
-
-The panel automatically loads history from the DB on creation and after every `_open_file()` call in MainWindow.
-
+ 
+The panel loads history when initialized, when the user navigates to the History tab, and after `_open_file()` calls in MainWindow.
+ 
 ---
-
+ 
+## SettingsPanel
+ 
+**File:** `ui/components/settings_panel.py`  
+**Base class:** `SimpleCardWidget` (qfluentwidgets)
+ 
+Page providing user configurations.
+ 
+### Elements
+ 
+| Element | Type | Description |
+|---------|------|-------------|
+| folder_edit & browse_btn | `LineEdit` + `PushButton` | Select default directory for video file dialogs |
+| preview_checkbox | `CheckBox` | Toggle thumbnail previews in history |
+| wheel_vol_checkbox | `CheckBox` | Toggle mouse wheel volume adjustment |
+| vol_boost_checkbox | `CheckBox` | Enable master volume boost up to 200% |
+| blanket_fill_checkbox | `CheckBox` | Toggle Blanket Fill ambient blur mode |
+ 
+### Signals
+ 
+| Signal | Type | When it fires |
+|--------|------|---------------|
+| `history_preview_changed` | `(bool)` | History previews checkbox changed |
+| `volume_boost_changed` | `(bool)` | 200% volume boost checkbox changed |
+| `wheel_volume_changed` | `(bool)` | Mouse wheel volume checkbox changed |
+| `blanket_fill_changed` | `(bool)` | Blanket Fill checkbox changed |
+ 
+---
+ 
 ## Creating a New Component
+
 
 ### Template
 

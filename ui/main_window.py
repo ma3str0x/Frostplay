@@ -1,4 +1,5 @@
 import os
+import sys
 
 from PyQt6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
@@ -37,6 +38,7 @@ from qfluentwidgets import (
 from core.config import load_config
 from core.media_properties import get_media_properties
 from core.mixer import build_lavfi_complex
+from core.perf import log_perf
 from core.player_interface import PlayerInterface
 from core.preview_generator import PreviewGenerator
 from core.types import MixSelection
@@ -59,7 +61,14 @@ except (OSError, ImportError):
 
 def get_round_icon(image_path: str) -> QIcon:
     from PyQt6.QtCore import Qt
+    if not os.path.isabs(image_path):
+        if getattr(sys, "frozen", False):
+            base_dir = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+        else:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        image_path = os.path.join(base_dir, image_path)
     img = QPixmap(image_path)
+
     size = min(img.width(), img.height())
     img = img.copy((img.width() - size)//2, (img.height() - size)//2, size, size)
 
@@ -140,7 +149,7 @@ class WindowEdgeResizer(QObject):
 
         left = (x <= b)
         right = (x >= w - b)
-        top = (y <= b)
+        top = (y <= 4)
         bottom = (y >= h - b)
 
         # Do not block close/min/max buttons in top-right
@@ -211,12 +220,14 @@ class AspectBridge(QObject):
 
 
 class MainWindow(FluentWindow):  # type: ignore
-    def __init__(self) -> None:
+    def __init__(self, initial_file: str | None = None) -> None:
         super().__init__()
+        self._initial_file = initial_file
         self._aspect_bridge = AspectBridge(self)
         self._aspect_bridge.aspect_changed.connect(lambda _: self._update_blanket_fill())
         self.setWindowTitle("Frostplay")
         self.setWindowIcon(get_round_icon("img/Frostplay_logo.png"))
+
 
         # Configure the title bar icon (round logo placed at top-left)
         self.titleBar.hBoxLayout.insertSpacing(0, 12)
@@ -425,6 +436,13 @@ class MainWindow(FluentWindow):  # type: ignore
         self.history_frame.setStyleSheet(f"QFrame#HistoryFrame {{ {b_border} }}")
         self.settings_frame.setStyleSheet(f"QFrame#SettingsFrame {{ {b_border} }}")
 
+        self.stackedWidget.currentChanged.connect(self._on_stack_current_changed)
+
+    def _on_stack_current_changed(self, index: int) -> None:
+        if hasattr(self, "history_frame") and hasattr(self, "history_panel"):
+            if self.stackedWidget.widget(index) is self.history_frame:
+                self.history_panel.reload_history()
+
     def resizeEvent(self, e: "QResizeEvent | None") -> None:
         super().resizeEvent(e)
         self.titleBar.move(0, 0)
@@ -457,13 +475,23 @@ class MainWindow(FluentWindow):  # type: ignore
             self.player.set_aspect_ratio_callback(
                 self._aspect_bridge.aspect_changed.emit
             )
+            if hasattr(self.player, "set_tracks_callback"):
+                self.player.set_tracks_callback(
+                    lambda tr: QTimer.singleShot(0, lambda: self.tracks_panel.set_tracks(tr))
+                )
             from core.config import load_config
             cfg = load_config()
-            self.player.set_blanket_fill(
-                self.player_widget.width(),
-                self.player_widget.height(),
-                cfg.blanket_fill,
-            )
+            if cfg.blanket_fill:
+                self.player.set_blanket_fill(
+                    self.player_widget.width(),
+                    self.player_widget.height(),
+                    True,
+                )
+            if self._initial_file and os.path.isfile(self._initial_file):
+                init_path = self._initial_file
+                self._initial_file = None
+                QTimer.singleShot(100, lambda: self.open_file(init_path))
+
 
     def changeEvent(self, event: QEvent | None) -> None:
         if event is not None and event.type() == QEvent.Type.WindowStateChange:
@@ -500,28 +528,53 @@ class MainWindow(FluentWindow):  # type: ignore
 
     # -- Slots ----------------------------------------------------------
 
+    def open_file(self, filepath: str) -> None:
+        """Public method to open and play a video file, switching view to player."""
+        if not self.player:
+            self._initial_file = filepath
+            return
+        self._open_file(filepath)
+
     def _open_file(self, filepath: str) -> None:
         if not self.player:
             return
+        log_perf("OPEN", f"Start _open_file: {filepath}")
+        # Immediately switch view to player and hide sidebar for instant responsiveness
+        self.stackedWidget.setCurrentWidget(self.player_frame)
+        self.navigationInterface.hide()
+
         self._current_filepath = filepath
         filename = os.path.basename(filepath)
         self.video_title_label.setText(filename)
         self.setWindowTitle(f"Frostplay - {filename}")
         self.player_widget.hide_placeholder()
-        self.player.open(filepath)
-        self.preview_generator.load_video(filepath)
-        self.tracks_panel.set_tracks(self.player.get_tracks())
-        add_to_history(filepath)
-        self.history_panel.reload_history()
-        QTimer.singleShot(1000, lambda: self._capture_active_thumbnail(filepath))
-        QTimer.singleShot(50, self._update_blanket_fill)
 
-        # Hide sidebar to leave purely the video
-        self.navigationInterface.hide()
+        log_perf("OPEN", "Calling player.open()")
+        self.player.open(filepath)
+        log_perf("OPEN", "player.open() returned")
+
+        self.preview_generator.load_video(filepath)
+        tracks = self.player.get_tracks()
+        if tracks:
+            self.tracks_panel.set_tracks(tracks)
+
+        log_perf("OPEN", "Calling add_to_history()")
+        add_to_history(filepath)
+        log_perf("OPEN", "add_to_history() returned")
+
+        QTimer.singleShot(1500, lambda: self._capture_active_thumbnail(filepath))
+        cfg = load_config()
+        if cfg.blanket_fill:
+            QTimer.singleShot(150, self._update_blanket_fill)
+        log_perf("OPEN", "Finished _open_file")
+
 
     def _show_tracks_menu(self) -> None:
         if self.tracks_panel.isHidden():
+            if self.player:
+                self.tracks_panel.set_tracks(self.player.get_tracks())
             # Ensure the panel has calculated its final size before positioning
+
             self.tracks_panel.adjustSize()
 
             # Place in the bottom right, above the player controls
@@ -638,8 +691,8 @@ class MainWindow(FluentWindow):  # type: ignore
             self.timeline_preview.update_pixmap_if_matching(sec, pixmap)
 
     def _on_history_file_selected(self, filepath: str) -> None:
-        self._open_file(filepath)
-        self.stackedWidget.setCurrentWidget(self.player_frame)
+        log_perf("HISTORY", f"User selected file: {filepath}")
+        self.open_file(filepath)
 
     def _on_mix_changed(self, selections: list[MixSelection]) -> None:
         if not self.player:
@@ -671,9 +724,9 @@ class MainWindow(FluentWindow):  # type: ignore
                 mpv_obj = getattr(self.player, "mpv", None)
                 if mpv_obj is not None:
                     mpv_obj.command("screenshot-to-file", thumb_path, "video")
-                    self.history_panel.reload_history()
             except Exception:
                 pass
+
 
     def _update_player_state(self) -> None:
         if self.player:
@@ -750,11 +803,12 @@ class MainWindow(FluentWindow):  # type: ignore
         if self.player:
             from core.config import load_config
             cfg = load_config()
-            self.player.set_blanket_fill(
-                self.player_widget.width(),
-                self.player_widget.height(),
-                cfg.blanket_fill,
-            )
+            if cfg.blanket_fill:
+                self.player.set_blanket_fill(
+                    self.player_widget.width(),
+                    self.player_widget.height(),
+                    True,
+                )
 
     def _on_blanket_fill_changed(self, enabled: bool) -> None:
         if self.player:

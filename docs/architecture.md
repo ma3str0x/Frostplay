@@ -113,15 +113,15 @@ sequenceDiagram
     participant User
     participant MainWindow
     participant MpvPlayer
-    participant TrackInspector
+    participant libmpv
     participant TracksPanel
     participant Mixer
 
-    User->>MainWindow: Open file
+    User->>MainWindow: Open file (GUI or "Open with")
     MainWindow->>MpvPlayer: open(filepath)
-    MpvPlayer->>TrackInspector: inspect_tracks(filepath)
-    TrackInspector-->>MpvPlayer: list[Track]
-    MpvPlayer-->>MainWindow: (tracks ready)
+    MpvPlayer->>libmpv: play(filepath) [Immediate non-blocking]
+    libmpv-->>MpvPlayer: property_observer("track-list") fires
+    MpvPlayer-->>MainWindow: tracks_callback(list[Track])
     MainWindow->>TracksPanel: set_tracks(tracks)
     TracksPanel-->>MainWindow: mix_changed(list[MixSelection])
     MainWindow->>Mixer: build_lavfi_complex(selections)
@@ -140,24 +140,30 @@ sequenceDiagram
 
 This allows developing and testing the UI without a real video file.
 
-### 2. Deferred MPV Initialization
+### 2. Deferred MPV Initialization & Async Property Observers
 
-MPV is initialized only after `showEvent()` of the main window via `QTimer.singleShot(0, ...)` to guarantee that `winId()` is already valid (native window has been created).
+- MPV is initialized only after `showEvent()` of the main window via `QTimer.singleShot(0, ...)` to guarantee that `winId()` is already valid (native window has been created).
+- **Asynchronous Track Extraction:** Instead of synchronously spawning external `ffprobe` processes during `open()` (which previously caused 5-7 second UI freezes), `MpvPlayer` listens to `libmpv`'s native `track-list` property observer. Audio tracks are parsed on-the-fly and delivered to the UI without blocking the Qt event loop.
 
-### 3. Floating Panel (Tool Window)
+### 3. Single-Instance IPC Architecture
+
+Frostplay uses `QLocalServer` / `QLocalSocket` for cross-process communication. When a user double-clicks a video or uses "Open with" while Frostplay is already running, the new process sends the file path over the IPC channel to the primary instance and terminates immediately, eliminating redundant process startup overhead.
+
+### 4. Floating Panel (Tool Window)
 
 `TracksPanel` uses `Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint`:
 - Does not block the main window (unlike `Dialog`/`Popup`)
 - Can be dragged with the mouse
 - Displayed above the player
 
-### 4. lavfi-complex Mixing
+### 5. lavfi-complex Mixing
 
 Audio track mixing happens at the libmpv level through the `lavfi-complex` filter graph. The `mixer.py` module builds the filter string in a purely functional manner, without side effects.
 
-### 5. Signals Instead of Callbacks
+### 6. Lazy Loading for Heavy UI Components
 
-All UI communication is built on Qt signals (`pyqtSignal`). Components don't know about each other — connections are made in `MainWindow`.
+The `HistoryPanel` defers heavy item population until the user actually switches to the History tab, preventing unnecessary widget creation and disk access during initial application launch.
+
 
 ## External Dependencies
 

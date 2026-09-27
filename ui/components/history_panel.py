@@ -115,9 +115,9 @@ class HistoryItemWidget(QWidget):
                 self.thumb_label.setPixmap(make_rounded_pixmap(pix))
                 return
 
-        # Show placeholder and request thumbnail in background
+        # Show placeholder; do not flood background with heavy MPV instances
         self.thumb_label.setPixmap(create_placeholder_pixmap())
-        get_thumbnail_manager().request_thumbnail(self.filepath)
+
 
     def update_thumbnail(self, thumb_path: str) -> None:
         if self.thumb_label and os.path.exists(thumb_path):

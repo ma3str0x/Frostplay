@@ -2,8 +2,8 @@ from typing import Any
 
 import mpv
 
+from core.perf import log_perf
 from core.player_interface import PlayerInterface
-from core.track_inspector import inspect_tracks
 from core.types import Track
 
 
@@ -24,13 +24,24 @@ class MpvPlayer(PlayerInterface):
         self._video_h: int = 0
         self._video_par: float = 1.0
         self._aspect_callback: Any = None
+        self._tracks_callback: Any = None
 
         kwargs: dict[str, str] = {}
         if wid is not None:
             kwargs["wid"] = str(wid)
 
+        # Hardware video decoding, input isolation, and silence console logging
+        kwargs["hwdec"] = "auto-safe"
+        kwargs["vo"] = "gpu"
+        kwargs["terminal"] = "no"
+        kwargs["msg_level"] = "all=no"
+        kwargs["input_default_bindings"] = "no"
+        kwargs["input_vo_keyboard"] = "no"
+        kwargs["cursor_autohide"] = "no"
         kwargs["volume_max"] = "200"
+        log_perf("PLAYER", "Initializing MPV instance")
         self.mpv = mpv.MPV(**kwargs)
+        log_perf("PLAYER", "MPV instance initialized")
         # Keep open after file ends so we can seek back
         self.mpv.keep_open = True
         self.mpv.lavfi_complex = ""
@@ -47,8 +58,39 @@ class MpvPlayer(PlayerInterface):
                     self._aspect_callback((self._video_w * self._video_par) / self._video_h)
         self._video_params_observer = on_video_params
 
+        @self.mpv.property_observer('track-list')  # type: ignore[untyped-decorator]
+        def on_track_list(name: str, value: Any) -> None:
+            new_tracks = self._extract_tracks_from_mpv()
+            if new_tracks:
+                self._tracks = new_tracks
+                log_perf("PLAYER", f"on_track_list observer found {len(new_tracks)} tracks")
+                if self._tracks_callback:
+                    self._tracks_callback(new_tracks)
+        self._track_list_observer = on_track_list
+
+    def set_tracks_callback(self, callback: Any) -> None:
+        self._tracks_callback = callback
+
+    def _extract_tracks_from_mpv(self) -> list[Track]:
+        tracks: list[Track] = []
+        try:
+            for t in getattr(self.mpv, "track_list", []):
+                if t.get("type") == "audio":
+                    tracks.append(
+                        Track(
+                            index=int(t.get("id", len(tracks) + 1)),
+                            language=str(t.get("lang") or "und"),
+                            codec=str(t.get("codec") or ""),
+                        )
+                    )
+        except Exception:
+            pass
+
+        return tracks
+
     def open(self, filepath: str) -> None:
-        self._tracks = inspect_tracks(filepath, ffprobe_path=self.ffprobe_path)
+        log_perf("PLAYER", f"open({filepath}) start")
+        self._current_file = filepath
         self._video_lavfi = ""
         self._audio_lavfi = ""
         self._video_w = 0
@@ -58,7 +100,12 @@ class MpvPlayer(PlayerInterface):
             self.mpv.vid = 1
         except Exception:
             pass
+        # Start playback immediately without blocking external process
         self.mpv.play(filepath)
+        log_perf("PLAYER", "mpv.play() called")
+        self._tracks = self._extract_tracks_from_mpv()
+        log_perf("PLAYER", f"open({filepath}) finished")
+
 
     def play_pause(self) -> None:
         self.mpv.pause = not self.mpv.pause
@@ -70,7 +117,10 @@ class MpvPlayer(PlayerInterface):
             self.mpv.seek(seconds)
 
     def get_tracks(self) -> list[Track]:
+        if not self._tracks:
+            self._tracks = self._extract_tracks_from_mpv()
         return self._tracks
+
 
     def _apply_lavfi(self) -> None:
         parts = []

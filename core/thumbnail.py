@@ -39,6 +39,8 @@ def generate_thumbnail_sync(video_path: str, target_width: int = 240) -> str | N
             frames=1,
             ao="null",
             start="1",
+            terminal="no",
+            msg_level="all=no",
         )
         p.play(video_path)
         try:
@@ -86,10 +88,12 @@ class ThumbnailManager(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._pool = QThreadPool.globalInstance()
+        self._pool = QThreadPool(self)
+        self._pool.setMaxThreadCount(1)
         self._pending: set[str] = set()
         self._signals = ThumbnailSignals()
         self._signals.ready.connect(self._on_ready)
+
 
     def request_thumbnail(self, video_path: str) -> str | None:
         thumb = get_thumbnail_path(video_path)

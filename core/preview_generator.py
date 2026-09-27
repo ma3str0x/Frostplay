@@ -30,6 +30,8 @@ class _PreviewThread(QThread):
                 ao="null",
                 pause=True,
                 keep_open=True,
+                terminal="no",
+                msg_level="all=no",
             )
             self._mpv.play(self.video_path)
             time.sleep(0.3)
@@ -93,8 +95,10 @@ class PreviewGenerator(QObject):
         self.close()
         self._current_path = video_path
         self._cache.clear()
-        if os.path.exists(video_path):
-            self._worker = _PreviewThread(video_path, self)
+
+    def _ensure_worker(self) -> None:
+        if not self._worker and self._current_path and os.path.exists(self._current_path):
+            self._worker = _PreviewThread(self._current_path, self)
             self._worker.frame_ready.connect(self._on_frame_ready)
             self._worker.start()
 
@@ -102,6 +106,8 @@ class PreviewGenerator(QObject):
         sec = max(0, int(round(seconds)))
         if sec in self._cache:
             return self._cache[sec]
+
+        self._ensure_worker()
 
         # Return nearest frame if available within 3 seconds
         for offset in (1, -1, 2, -2, 3, -3):
@@ -114,6 +120,7 @@ class PreviewGenerator(QObject):
         if self._worker:
             self._worker.request(sec)
         return None
+
 
     def _on_frame_ready(self, sec: int, pix: QPixmap) -> None:
         # Keep cache bounded to 100 frames

@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from core.types import Track
@@ -36,11 +37,13 @@ def inspect_tracks(filepath: str | Path, ffprobe_path: str = "ffprobe") -> list[
     ]
 
     try:
+        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            creationflags=creationflags,
         )
     except FileNotFoundError as e:
         raise TrackInspectorError(f"ffprobe executable not found: {ffprobe_path}") from e
