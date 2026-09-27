@@ -1,6 +1,6 @@
 ; Inno Setup Script for Frostplay
 #define MyAppName "Frostplay"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "ma3str0"
 #define MyAppURL "https://github.com/ma3str0x/Frostplay"
 #define MyAppExeName "Frostplay.exe"

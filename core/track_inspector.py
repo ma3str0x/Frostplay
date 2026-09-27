@@ -37,7 +37,9 @@ def inspect_tracks(filepath: str | Path, ffprobe_path: str = "ffprobe") -> list[
     ]
 
     try:
-        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        creationflags = (
+            int(getattr(subprocess, "CREATE_NO_WINDOW", 0)) if sys.platform == "win32" else 0
+        )
         result = subprocess.run(
             cmd,
             capture_output=True,
