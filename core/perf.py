@@ -1,6 +1,4 @@
 import os
-import sys
-import time
 from datetime import datetime
 
 LOG_FILE = os.path.join(

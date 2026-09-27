@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import urllib.request
 import zipfile
@@ -39,7 +38,8 @@ def download_with_progress(url: str, dest_path: str, label: str) -> None:
                 percent = downloaded / total * 100
                 mb_down = downloaded / (1024 * 1024)
                 mb_total = total / (1024 * 1024)
-                print(f"\r  [{percent:5.1f}%] {mb_down:.1f}MB / {mb_total:.1f}MB", end="", flush=True)
+                status = f"\r  [{percent:5.1f}%] {mb_down:.1f}MB / {mb_total:.1f}MB"
+                print(status, end="", flush=True)
     print("\n  Download complete.")
 
 

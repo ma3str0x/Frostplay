@@ -81,9 +81,9 @@ def main() -> None:
         print("ERROR: Inno Setup compilation failed!")
         sys.exit(res_iscc.returncode)
 
-    # 4. Optional: If Frostplay is installed in D:\Frostplay, update it directly
     install_target = r"D:\Frostplay"
-    if os.path.isdir(install_target) and os.path.exists(os.path.join(install_target, "Frostplay.exe")):
+    exe_in_target = os.path.join(install_target, "Frostplay.exe")
+    if os.path.isdir(install_target) and os.path.exists(exe_in_target):
         print(f"\n[4/4] Updating installed files in {install_target}...")
         try:
             dist_dir = os.path.join(project_dir, "dist", "Frostplay")
